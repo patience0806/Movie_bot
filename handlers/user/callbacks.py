@@ -1,4 +1,4 @@
-from aiogram import Router, F
+from aiogram import Router, F, Bot
 from aiogram.types import CallbackQuery
 
 import database as db
@@ -7,8 +7,24 @@ from keyboards.inline.movie import episodes_list_keyboard
 router = Router()
 
 
+async def _ensure_subscribed(callback: CallbackQuery, bot: Bot) -> bool:
+    """True qaytaradi agar foydalanuvchi barcha faol kanallarga obuna bo'lgan bo'lsa.
+    Aks holda obuna xabarini qayta ko'rsatadi va False qaytaradi.
+    Tekshiruv mantig'i faqat handlers/user/subscribe.py da (yagona manba) - bu yerda takrorlanmaydi."""
+    from handlers.user.subscribe import get_pending_channels, send_subscription_prompt
+
+    pending = await get_pending_channels(bot, callback.from_user.id)
+    if pending:
+        await callback.answer("❗️ Avval barcha kanallarga obuna bo'ling.", show_alert=True)
+        await send_subscription_prompt(callback.message, bot)
+        return False
+    return True
+
+
 @router.callback_query(F.data.startswith("user_watch:"))
-async def user_watch_movie(callback: CallbackQuery):
+async def user_watch_movie(callback: CallbackQuery, bot: Bot):
+    if not await _ensure_subscribed(callback, bot):
+        return
     movie_id = int(callback.data.split(":")[1])
     movie = await db.get_movie_by_id(movie_id)
     if not movie:
@@ -27,7 +43,9 @@ async def user_watch_movie(callback: CallbackQuery):
 
 
 @router.callback_query(F.data.startswith("user_episodes:"))
-async def user_episodes_list(callback: CallbackQuery):
+async def user_episodes_list(callback: CallbackQuery, bot: Bot):
+    if not await _ensure_subscribed(callback, bot):
+        return
     movie_id = int(callback.data.split(":")[1])
     episodes = await db.get_episodes(movie_id)
     await callback.answer()
@@ -40,7 +58,9 @@ async def user_episodes_list(callback: CallbackQuery):
 
 
 @router.callback_query(F.data.startswith("user_ep_watch:"))
-async def user_episode_watch(callback: CallbackQuery):
+async def user_episode_watch(callback: CallbackQuery, bot: Bot):
+    if not await _ensure_subscribed(callback, bot):
+        return
     _, movie_id, ep_number = callback.data.split(":")
     episode = await db.get_episode(int(movie_id), int(ep_number))
     await callback.answer()

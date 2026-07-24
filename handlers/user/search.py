@@ -1,4 +1,4 @@
-from aiogram import Router, F
+from aiogram import Router, F, Bot
 from aiogram.types import Message
 
 import database as db
@@ -23,9 +23,20 @@ async def send_movie_card(message: Message, movie):
 
 
 @router.message(F.text)
-async def lookup_movie_by_code(message: Message):
+async def lookup_movie_by_code(message: Message, bot: Bot):
     """Foydalanuvchi yuborgan har qanday matn kino kodi sifatida qidiriladi.
-    Alohida qidiruv/trend/sevimlilar tugmalari endi kerak emas."""
+    Alohida qidiruv/trend/sevimlilar tugmalari endi kerak emas.
+
+    MUHIM: har bir so'rovdan oldin majburiy obuna DINAMIK tekshiriladi
+    (get_pending_channels har safar SQLite'dan yangi ro'yxatni o'qiydi,
+    hech narsa keshlanmaydi - admin yangi kanal qo'shsa, keyingi so'rovdayoq ishga tushadi)."""
+    from handlers.user.subscribe import get_pending_channels, send_subscription_prompt
+
+    pending = await get_pending_channels(bot, message.from_user.id)
+    if pending:
+        await send_subscription_prompt(message, bot)
+        return
+
     code = message.text.strip()
     movie = await db.get_movie_by_code(code)
     await db.log_search()
