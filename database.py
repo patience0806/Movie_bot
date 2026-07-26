@@ -109,6 +109,16 @@ async def init_db():
             searches INTEGER DEFAULT 0
         )""")
 
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS join_requests (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            channel_id INTEGER NOT NULL,
+            requested_at TEXT NOT NULL,
+            status TEXT DEFAULT 'requested',
+            UNIQUE(user_id, channel_id)
+        )""")
+
         await db.commit()
 
 
@@ -488,3 +498,46 @@ async def _increment_daily_stat_internal(db: aiosqlite.Connection, field: str):
                 "INSERT INTO statistics (date, new_users, searches) VALUES (?, 0, 1)", (today,)
             )
     await db.commit()
+
+# ==================== JOIN REQUESTS (PRIVATE TELEGRAM CHANNELS) ====================
+
+async def get_channel_by_chat_id(chat_id: str):
+    """Kanalni uning chat_id qiymati bo'yicha topadi (chat_join_request kelganda
+    kanalni bizning bazamizdagi yozuv bilan moslashtirish uchun ishlatiladi)."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute("SELECT * FROM channels WHERE chat_id = ?", (str(chat_id),))
+        return await cursor.fetchone()
+
+
+async def add_join_request(user_id: int, channel_id: int):
+    """Foydalanuvchi private kanalga Join Request yuborganda chaqiriladi.
+    Agar bu foydalanuvchi/kanal juftligi uchun yozuv allaqachon mavjud bo'lsa, qayta yozilmaydi
+    (UNIQUE(user_id, channel_id) tufayli xato bermasligi uchun avval tekshiramiz)."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute(
+            "SELECT id FROM join_requests WHERE user_id = ? AND channel_id = ?", (user_id, channel_id)
+        )
+        if await cursor.fetchone():
+            await db.execute(
+                "UPDATE join_requests SET status = 'requested' WHERE user_id = ? AND channel_id = ?",
+                (user_id, channel_id)
+            )
+        else:
+            await db.execute(
+                "INSERT INTO join_requests (user_id, channel_id, requested_at, status) "
+                "VALUES (?, ?, ?, 'requested')",
+                (user_id, channel_id, now_str())
+            )
+        await db.commit()
+
+
+async def has_active_join_request(user_id: int, channel_id: int) -> bool:
+    """Foydalanuvchi shu private kanalga request yuborganmi (status='requested' yoki 'approved')."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute(
+            "SELECT id FROM join_requests WHERE user_id = ? AND channel_id = ? "
+            "AND status IN ('requested', 'approved')",
+            (user_id, channel_id)
+        )
+        return (await cursor.fetchone()) is not None

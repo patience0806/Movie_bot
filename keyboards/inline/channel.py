@@ -60,7 +60,8 @@ def channel_edit_fields_keyboard(channel_id: int) -> InlineKeyboardMarkup:
 def channel_type_keyboard() -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     types = [
-        ("Telegram", "telegram"),
+        ("Telegram (Public)", "telegram"),
+        ("Telegram (Private/So'rov)", "telegram_private"),
         ("Instagram", "instagram"),
         ("YouTube", "youtube"),
         ("TikTok", "tiktok"),

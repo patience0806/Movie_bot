@@ -88,7 +88,7 @@ async def add_channel_type_chosen(callback: CallbackQuery, state: FSMContext):
 async def add_channel_url(message: Message, state: FSMContext):
     await state.update_data(url=message.text.strip())
     data = await state.get_data()
-    if data.get("type") == "telegram":
+    if data.get("type") in ("telegram", "telegram_private"):
         await state.set_state(ChannelAdd.chat_id)
         await message.answer(
             "🆔 Kanalning chat ID yoki @username qiymatini yuboring "
@@ -274,10 +274,10 @@ async def channel_edit_receive_value(message: Message, state: FSMContext):
             return
         value = int(value)
 
-    if field == "type" and value not in ("telegram", "instagram", "youtube", "tiktok", "website"):
+    if field == "type" and value not in ("telegram", "telegram_private", "instagram", "youtube", "tiktok", "website"):
         await message.answer(
             "⚠️ Turi faqat quyidagilardan biri bo'lishi kerak: "
-            "telegram, instagram, youtube, tiktok, website"
+            "telegram, telegram_private, instagram, youtube, tiktok, website"
         )
         return
 
