@@ -118,7 +118,55 @@ async def init_db():
             status TEXT DEFAULT 'requested',
             UNIQUE(user_id, channel_id)
         )""")
+                # ==================== PREMIUM TABLES ====================
 
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS premium_plans (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            duration_days INTEGER NOT NULL,
+            price INTEGER NOT NULL,
+            status INTEGER DEFAULT 1,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )""")
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS premium_payments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            plan_id INTEGER NOT NULL,
+            plan_name_snapshot TEXT NOT NULL,
+            price_snapshot INTEGER NOT NULL,
+            duration_days_snapshot INTEGER NOT NULL,
+            screenshot_file_id TEXT NOT NULL,
+            status TEXT DEFAULT 'pending',
+            created_at TEXT NOT NULL,
+            approved_at TEXT,
+            rejected_at TEXT,
+            admin_id INTEGER
+        )""")
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS premium_subscriptions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            payment_id INTEGER,
+            plan_id INTEGER NOT NULL,
+            plan_name TEXT NOT NULL,
+            price INTEGER NOT NULL,
+            started_at TEXT NOT NULL,
+            expires_at TEXT NOT NULL,
+            status TEXT DEFAULT 'active'
+        )""")
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS premium_settings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            key TEXT UNIQUE NOT NULL,
+            value TEXT
+        )""")
+        
         await db.commit()
 
 
