@@ -6,7 +6,7 @@ import database as db
 from utils.filters import IsAdmin
 from keyboards.reply.user import BTN_ADMIN_PANEL, get_user_menu
 from keyboards.reply.admin import get_admin_menu, BTN_BACK, BTN_MOVIES, BTN_CHANNELS, \
-    BTN_ADS, BTN_STATISTICS
+    BTN_ADS, BTN_PREMIUM, BTN_STATISTICS
 from keyboards.reply.movie import get_movie_menu
 from keyboards.reply.channel import get_channel_menu
 
@@ -39,6 +39,13 @@ async def open_ads_panel(message: Message, state: FSMContext):
     await ads_entry(message, state)
 
 
+@router.message(F.text == BTN_PREMIUM)
+async def open_premium_panel(message: Message, state: FSMContext):
+    await state.update_data(admin_section="premium")
+    from handlers.admin.premium import premium_entry
+    await premium_entry(message, state)
+
+
 @router.message(F.text == BTN_STATISTICS)
 async def show_statistics(message: Message):
     total_users = await db.get_users_count()
@@ -47,6 +54,7 @@ async def show_statistics(message: Message):
     total_movies = await db.get_movies_count()
     today_searches = await db.get_today_searches_count()
     today_ads = await db.get_today_ads_count()
+    premium_users = await db.get_premium_subscriptions_count()
     most_searched = await db.get_most_searched_movie()
     most_viewed = await db.get_most_viewed_movie()
 
@@ -58,6 +66,7 @@ async def show_statistics(message: Message):
         f"🎬 Jami kinolar: <b>{total_movies}</b>\n"
         f"🔍 Bugungi qidiruvlar: <b>{today_searches}</b>\n"
         f"📣 Bugungi reklama: <b>{today_ads}</b>\n"
+        f"💎 Premium foydalanuvchilar (jami): <b>{premium_users}</b>\n"
         f"🏆 Eng ko'p qidirilgan kino: <b>"
         f"{most_searched['code'] + ' (' + str(most_searched['search_count']) + ' marta)' if most_searched else '—'}</b>\n"
         f"👁 Eng ko'p ko'rilgan kino: <b>"
@@ -71,7 +80,7 @@ async def go_back(message: Message, state: FSMContext):
     data = await state.get_data()
     section = data.get("admin_section", "main")
 
-    if section in ("movies", "channels", "ads"):
+    if section in ("movies", "channels", "ads", "premium"):
         await state.update_data(admin_section="main")
         await message.answer("👤 Admin Panel", reply_markup=get_admin_menu())
         return

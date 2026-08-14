@@ -15,8 +15,15 @@ async def mandatory_sub_enabled() -> bool:
 
 
 async def get_pending_channels(bot: Bot, user_id: int):
-    """Foydalanuvchi hali obuna bo'lmagan (faqat telegram turidagi) kanallarni qaytaradi."""
+    """Foydalanuvchi hali obuna bo'lmagan (faqat telegram turidagi) kanallarni qaytaradi.
+
+    MUHIM: agar foydalanuvchi Premium faol bo'lsa, majburiy obuna umuman TEKSHIRILMAYDI
+    va bo'sh ro'yxat qaytariladi - bu Premium va majburiy obuna tizimlarini bir-biriga
+    aralashtirmasdan, yagona joyda ajratib turadi."""
     from utils.check_sub import get_unsubscribed_channels
+
+    if await db.is_premium_active(user_id):
+        return []
 
     if not await mandatory_sub_enabled():
         return []

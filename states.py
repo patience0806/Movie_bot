@@ -46,3 +46,27 @@ class ChannelEdit(StatesGroup):
 class BroadcastMessage(StatesGroup):
     waiting_content = State()
     confirm = State()
+
+
+class PremiumBuy(StatesGroup):
+    """Oddiy foydalanuvchi Premium sotib olayotganda ishlatiladi."""
+    waiting_screenshot = State()
+
+
+class PremiumPlanAdd(StatesGroup):
+    """Admin yangi Premium tarif qo'shayotganda ishlatiladi."""
+    name = State()
+    duration_days = State()
+    price = State()
+    confirm = State()
+
+
+class PremiumPlanEdit(StatesGroup):
+    """Admin mavjud Premium tarifni tahrirlayotganda ishlatiladi."""
+    new_value = State()
+
+
+class PremiumCard(StatesGroup):
+    """Admin karta raqami/egasini o'zgartirayotganda ishlatiladi."""
+    waiting_number = State()
+    waiting_holder = State()

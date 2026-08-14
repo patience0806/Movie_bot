@@ -1,5 +1,5 @@
 import aiosqlite
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 
 from config import DB_PATH
 
@@ -499,6 +499,223 @@ async def _increment_daily_stat_internal(db: aiosqlite.Connection, field: str):
             )
     await db.commit()
 
+# ==================== ADMINS (ro'yxat - Premium to'lov bildirishnomalari uchun) ====================
+
+async def get_admins():
+    """Barcha adminlar ro'yxati - Premium to'lov kelganda ularning barchasiga xabar
+    yuborish uchun ishlatiladi."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute("SELECT * FROM admins ORDER BY is_owner DESC, id ASC")
+        return await cursor.fetchall()
+
+
+# ==================== PREMIUM: TARIFLAR (premium_plans) ====================
+
+async def add_plan(name: str, duration_days: int, price: int) -> int:
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute(
+            "INSERT INTO premium_plans (name, duration_days, price, status, created_at, updated_at) "
+            "VALUES (?, ?, ?, 'active', ?, ?)",
+            (name, duration_days, price, now_str(), now_str())
+        )
+        await db.commit()
+        return cursor.lastrowid
+
+
+async def get_plan_by_id(plan_id: int):
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute("SELECT * FROM premium_plans WHERE id = ?", (plan_id,))
+        return await cursor.fetchone()
+
+
+async def get_active_plans():
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(
+            "SELECT * FROM premium_plans WHERE status = 'active' ORDER BY duration_days ASC"
+        )
+        return await cursor.fetchall()
+
+
+async def get_all_plans():
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute("SELECT * FROM premium_plans ORDER BY id DESC")
+        return await cursor.fetchall()
+
+
+ALLOWED_PLAN_FIELDS = {"name", "duration_days", "price", "status"}
+
+
+async def update_plan_field(plan_id: int, field: str, value):
+    if field not in ALLOWED_PLAN_FIELDS:
+        raise ValueError(f"Invalid plan field: {field}")
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            f"UPDATE premium_plans SET {field} = ?, updated_at = ? WHERE id = ?",
+            (value, now_str(), plan_id)
+        )
+        await db.commit()
+
+
+async def delete_plan(plan_id: int):
+    """Tarifni o'chiradi. Eski premium_payments/premium_subscriptions yozuvlariga TEGMAYDI,
+    chunki ular plan_name_snapshot/price_snapshot orqali o'z holatini mustaqil saqlaydi."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("DELETE FROM premium_plans WHERE id = ?", (plan_id,))
+        await db.commit()
+
+
+# ==================== PREMIUM: TO'LOVLAR (premium_payments) ====================
+
+async def create_payment(user_id: int, plan_id: int, plan_name_snapshot: str,
+                          price_snapshot: int, duration_days_snapshot: int,
+                          screenshot_file_id: str) -> int:
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute(
+            """INSERT INTO premium_payments
+            (user_id, plan_id, plan_name_snapshot, price_snapshot, duration_days_snapshot,
+             screenshot_file_id, status, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)""",
+            (user_id, plan_id, plan_name_snapshot, price_snapshot, duration_days_snapshot,
+             screenshot_file_id, now_str())
+        )
+        await db.commit()
+        return cursor.lastrowid
+
+
+async def get_payment_by_id(payment_id: int):
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute("SELECT * FROM premium_payments WHERE id = ?", (payment_id,))
+        return await cursor.fetchone()
+
+
+async def approve_payment(payment_id: int, admin_id: int):
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "UPDATE premium_payments SET status = 'approved', approved_at = ?, admin_id = ? WHERE id = ?",
+            (now_str(), admin_id, payment_id)
+        )
+        await db.commit()
+
+
+async def reject_payment(payment_id: int, admin_id: int):
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "UPDATE premium_payments SET status = 'rejected', rejected_at = ?, admin_id = ? WHERE id = ?",
+            (now_str(), admin_id, payment_id)
+        )
+        await db.commit()
+
+
+# ==================== PREMIUM: OBUNALAR (premium_subscriptions) ====================
+
+async def create_subscription(user_id: int, payment_id: int, plan_id: int,
+                               plan_name: str, price: int, duration_days: int) -> int:
+    started = datetime.now()
+    expires = started + timedelta(days=duration_days)
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute(
+            """INSERT INTO premium_subscriptions
+            (user_id, payment_id, plan_id, plan_name, price, started_at, expires_at, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 'active')""",
+            (user_id, payment_id, plan_id, plan_name, price,
+             started.strftime(DATE_FMT), expires.strftime(DATE_FMT))
+        )
+        await db.commit()
+        return cursor.lastrowid
+
+
+async def get_latest_subscription(user_id: int):
+    """Foydalanuvchining eng oxirgi (id bo'yicha) premium yozuvini qaytaradi (active yoki expired)."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(
+            "SELECT * FROM premium_subscriptions WHERE user_id = ? ORDER BY id DESC LIMIT 1",
+            (user_id,)
+        )
+        return await cursor.fetchone()
+
+
+async def is_premium_active(user_id: int) -> bool:
+    """MUHIM: har chaqirilganda muddatni JONLI tekshiradi (background task ishlatilmaydi -
+    bu eng ishonchli usul, chunki fon vazifasi server qayta ishga tushganda ishga
+    tushmasligi yoki kechikishi mumkin, jonli tekshiruv esa har doim aniq natija beradi).
+    Agar muddat o'tgan bo'lsa, statusni avtomatik 'expired' ga o'zgartiradi."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(
+            "SELECT * FROM premium_subscriptions WHERE user_id = ? AND status = 'active' "
+            "ORDER BY id DESC LIMIT 1",
+            (user_id,)
+        )
+        row = await cursor.fetchone()
+        if row is None:
+            return False
+
+        expires_at = datetime.strptime(row["expires_at"], DATE_FMT)
+        if expires_at > datetime.now():
+            return True
+
+        await db.execute(
+            "UPDATE premium_subscriptions SET status = 'expired' WHERE id = ?", (row["id"],)
+        )
+        await db.commit()
+        return False
+
+
+def is_subscription_currently_active(subscription_row) -> bool:
+    """Vaqtga bog'liq holda, bazadagi 'status' ustuniga qaramasdan haqiqiy holatni hisoblaydi.
+    Admin ro'yxatida har doim aniq (jonli) holat ko'rsatilishi uchun ishlatiladi.
+    (Sinxron funksiya - DB ulanishi kerak emas, faqat berilgan qatordagi vaqtni solishtiradi.)"""
+    expires_at = datetime.strptime(subscription_row["expires_at"], DATE_FMT)
+    return expires_at > datetime.now()
+
+
+async def get_premium_subscriptions_paginated(page: int, per_page: int):
+    """Admin uchun - har bir foydalanuvchining ENG OXIRGI premium yozuvi (eski tarixiy
+    yozuvlar ro'yxatda takrorlanmasligi uchun har bir user_id dan faqat MAX(id) olinadi)."""
+    offset = (page - 1) * per_page
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(
+            """SELECT ps.* FROM premium_subscriptions ps
+            INNER JOIN (
+                SELECT user_id, MAX(id) AS max_id FROM premium_subscriptions GROUP BY user_id
+            ) latest ON ps.id = latest.max_id
+            ORDER BY ps.id DESC LIMIT ? OFFSET ?""",
+            (per_page, offset)
+        )
+        return await cursor.fetchall()
+
+
+async def get_premium_subscriptions_count() -> int:
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute("SELECT COUNT(DISTINCT user_id) FROM premium_subscriptions")
+        row = await cursor.fetchone()
+        return row[0] if row else 0
+
+
+# ==================== PREMIUM: SOZLAMALAR (premium_settings - karta ma'lumotlari) ====================
+
+async def get_premium_setting(key: str, default=None):
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute("SELECT value FROM premium_settings WHERE key = ?", (key,))
+        row = await cursor.fetchone()
+        return row[0] if row else default
+
+
+async def set_premium_setting(key: str, value: str):
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute("SELECT id FROM premium_settings WHERE key = ?", (key,))
+        if await cursor.fetchone():
+            await db.execute("UPDATE premium_settings SET value = ? WHERE key = ?", (value, key))
+        else:
+            await db.execute("INSERT INTO premium_settings (key, value) VALUES (?, ?)", (key, value))
+        await db.commit()
 # ==================== JOIN REQUESTS (PRIVATE TELEGRAM CHANNELS) ====================
 
 async def get_channel_by_chat_id(chat_id: str):

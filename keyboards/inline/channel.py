@@ -12,6 +12,7 @@ EDITABLE_CHANNEL_FIELDS = [
 
 def subscribe_keyboard(channels) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(text="💎 Premium olish", callback_data="premium_open"))
     for ch in channels:
         builder.row(InlineKeyboardButton(text=f"🔗 {ch['name']}", url=ch['url']))
     builder.row(InlineKeyboardButton(text="✅ Tekshirish", callback_data="check_sub"))

@@ -14,11 +14,13 @@ from handlers.user import start as user_start
 from handlers.user import subscribe as user_subscribe
 from handlers.user import search as user_search
 from handlers.user import callbacks as user_callbacks
+from handlers.user import premium as user_premium
 
 from handlers.admin import panel as admin_panel
 from handlers.admin import movies as admin_movies
 from handlers.admin import channels as admin_channels
 from handlers.admin import ads as admin_ads
+from handlers.admin import premium as admin_premium
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -44,10 +46,12 @@ async def main():
     dp.include_router(admin_movies.router)
     dp.include_router(admin_channels.router)
     dp.include_router(admin_ads.router)
+    dp.include_router(admin_premium.router)
 
     # User routerlar
     dp.include_router(user_start.router)
     dp.include_router(user_subscribe.router)
+    dp.include_router(user_premium.router)
     dp.include_router(user_search.router)
     dp.include_router(user_callbacks.router)
 
