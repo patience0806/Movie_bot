@@ -41,6 +41,8 @@ async def premium_plan_chosen(callback: CallbackQuery, state: FSMContext):
 
     # Tarif ma'lumotlari FSM holatiga "suratga olinadi" (snapshot) - shu bilan
     # admin keyinchalik tarifni o'zgartirsa ham, ushbu to'lov eski narx/muddat bilan qoladi.
+    # MUHIM: har safar YANGI tarif tanlanganda bu yerdagi 4 ta kalit TO'LIQ ustidan yoziladi,
+    # shuning uchun eski (agar bo'lsa) tarif ma'lumotlari bilan aralashib ketish mumkin emas.
     await state.update_data(
         plan_id=plan["id"],
         plan_name=plan["name"],
@@ -102,10 +104,31 @@ async def premium_receive_screenshot(message: Message, state: FSMContext, bot: B
                 reply_markup=premium_payment_admin_keyboard(payment_id)
             )
         except Exception:
-            # Admin botni bloklagan yoki hali /start bosmagan bo'lishi mumkin - o'tkazib yuboriladi
             continue
 
 
 @router.message(PremiumBuy.waiting_screenshot)
-async def premium_screenshot_invalid(message: Message):
-    await message.answer("⚠️ Iltimos, to'lov chekining screenshot (rasm) shaklida yuboring.")
+async def premium_screenshot_invalid(message: Message, state: FSMContext, bot: Bot):
+    """MUHIM TUZATISH (bug fix): avval bu funksiya FSM holatini hech qachon
+    tozalamas edi - shu sabab foydalanuvchi to'lov jarayonida (screenshot kutilayotganda)
+    boshqa narsa (masalan kino kodi) yuborsa, holat ABADIY "osilib qolar" edi. Keyinchalik
+    foydalanuvchi Premium muddati tugab, qaytadan kanallarga obuna bo'lgandan so'ng ham,
+    kino kodi yuborganda bu ESKI holat uni ushlab qolib, "screenshot yuboring" deb
+    javob berardi; keyin rasm yuborsa esa ESKI (haftalar oldingi) tarif ma'lumotlari
+    bilan yangi to'lov yaratib, adminga xato yuborardi.
+
+    Endi: holat DOIM tozalanadi. Agar kelgan xabar matn bo'lsa (odatda bu holda
+    foydalanuvchi to'lovni tark etib, kino kodi yuborgan bo'ladi), xabar DARHOL
+    kino qidiruv funksiyasiga uzatiladi - foydalanuvchi qayta urinishi shart emas."""
+    await state.clear()
+
+    if message.text:
+        from handlers.user.search import lookup_movie_by_code
+        await lookup_movie_by_code(message, bot)
+        return
+
+    await message.answer(
+        "❌ Eski to'lov jarayoni bekor qilindi.\n\n"
+        "Agar Premium sotib olmoqchi bo'lsangiz, \"💎 Premium olish\" tugmasini qaytadan bosing, "
+        "yoki kino kodini yuboring."
+    )
