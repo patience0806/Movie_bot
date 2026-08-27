@@ -14,7 +14,11 @@ def subscribe_keyboard(channels) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(text="💎 Premium olish", callback_data="premium_open"))
     for ch in channels:
-        builder.row(InlineKeyboardButton(text=f"🔗 {ch['name']}", url=ch['url']))
+        if ch["type"] == "telegram_private":
+            label = f"📝 So'rov yuborish: {ch['name']}"
+        else:
+            label = f"🔗 {ch['name']}"
+        builder.row(InlineKeyboardButton(text=label, url=ch['url']))
     builder.row(InlineKeyboardButton(text="✅ Tekshirish", callback_data="check_sub"))
     return builder.as_markup()
 
@@ -72,3 +76,4 @@ def channel_type_keyboard() -> InlineKeyboardMarkup:
         builder.button(text=label, callback_data=f"ctype:{value}")
     builder.adjust(2)
     return builder.as_markup()
+

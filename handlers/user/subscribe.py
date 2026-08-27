@@ -1,3 +1,5 @@
+import logging
+
 from aiogram import Router, Bot, F
 from aiogram.types import CallbackQuery, Message, ChatJoinRequest
 
@@ -7,6 +9,7 @@ from keyboards.inline.channel import subscribe_keyboard
 from keyboards.reply.user import get_user_menu
 
 router = Router()
+logger = logging.getLogger(__name__)
 
 
 async def mandatory_sub_enabled() -> bool:
@@ -18,8 +21,8 @@ async def get_pending_channels(bot: Bot, user_id: int):
     """Foydalanuvchi hali obuna bo'lmagan (faqat telegram turidagi) kanallarni qaytaradi.
 
     MUHIM: agar foydalanuvchi Premium faol bo'lsa, majburiy obuna umuman TEKSHIRILMAYDI
-    va bo'sh ro'yxat qaytariladi - bu Premium va majburiy obuna tizimlarini bir-biriga
-    aralashtirmasdan, yagona joyda ajratib turadi."""
+    va bo'sh ro'yxat qaytariladi - Premium va majburiy obuna tizimlari bir-biriga
+    aralashmasligi shu yerda ta'minlanadi."""
     from utils.check_sub import get_unsubscribed_channels
 
     if await db.is_premium_active(user_id):
@@ -34,11 +37,21 @@ async def get_pending_channels(bot: Bot, user_id: int):
 
 
 async def send_subscription_prompt(message: Message, bot: Bot):
-    channels = await db.get_channels(active_only=True)
+    """MUHIM TUZATISH: avval bu funksiya HAR DOIM barcha faol kanallarni ko'rsatar edi,
+    hatto foydalanuvchi ularning ba'zilarini allaqachon bajargan bo'lsa ham (masalan
+    6 tadan 5 tasini bajargan bo'lsa ham, baribir 6 tasi ko'rsatilardi). Bu chalkashlik
+    va keraksiz qayta urinishlarga (va natijada Telegram'ning "Too Many Attempts"
+    cheklovi kabi holatlarga) sabab bo'lardi.
+
+    Endi FAQAT hali bajarilmagan (pending) kanallar ko'rsatiladi - foydalanuvchi
+    aniq nechta va aynan qaysi kanal qolganini ko'radi."""
+    pending = await get_pending_channels(bot, message.from_user.id)
+    if not pending:
+        pending = await db.get_channels(active_only=True)
     await message.answer(
-        "📢 Botdan foydalanish uchun quyidagi kanallarga obuna bo'ling, so'ng "
+        "📢 Botdan foydalanish uchun quyidagi kanal(lar)ga obuna bo'ling, so'ng "
         "\"✅ Tekshirish\" tugmasini bosing:",
-        reply_markup=subscribe_keyboard(channels)
+        reply_markup=subscribe_keyboard(pending)
     )
 
 
@@ -52,7 +65,10 @@ async def send_main_menu(message: Message, user_id: int):
 async def check_sub_callback(callback: CallbackQuery, bot: Bot):
     pending = await get_pending_channels(bot, callback.from_user.id)
     if pending:
+        names = ", ".join(ch["name"] for ch in pending)
+        logger.info(f"[check_sub] user_id={callback.from_user.id} hali obuna bo'lmagan: {names}")
         await callback.answer("❗️ Siz hali barcha kanallarga obuna bo'lmadingiz!", show_alert=True)
+        await callback.message.edit_reply_markup(reply_markup=subscribe_keyboard(pending))
         return
     await callback.answer("✅ Rahmat! Obuna tasdiqlandi.")
     await callback.message.delete()
@@ -63,12 +79,23 @@ async def check_sub_callback(callback: CallbackQuery, bot: Bot):
 async def handle_chat_join_request(event: ChatJoinRequest):
     """PRIVATE (telegram_private) kanalga foydalanuvchi Join Request yuborganda
     Telegram shu update'ni yuboradi. Buning uchun bot o'sha kanalda administrator
-    bo'lishi va 'Foydalanuvchilarni taklif qilish' huquqiga ega bo'lishi SHART -
-    aks holda Telegram bu update'ni botga umuman yubormaydi.
+    bo'lishi va 'Foydalanuvchilarni taklif qilish' huquqiga ega bo'lishi SHART.
 
-    Bu yerda faqat bazaga yozib qo'yamiz (status='requested'). Foydalanuvchini
-    kanalga avtomatik qabul qilish/rad etish bu yerda amalga oshirilmaydi -
-    buni admin Telegram'ning o'zida qo'lda tasdiqlaydi."""
+    MUHIM: bu yerda faqat HAQIQIY Telegram update kelganda bazaga yoziladi -
+    hech qachon sun'iy ravishda 'approved' qilinmaydi. Foydalanuvchini kanalga
+    qabul qilish/rad etish bu yerda amalga oshirilmaydi - buni admin Telegram'ning
+    o'zida qo'lda tasdiqlaydi."""
+    logger.info(f"[join_request] KELDI: chat_id={event.chat.id} user_id={event.from_user.id}")
     channel = await db.get_channel_by_chat_id(str(event.chat.id))
-    if channel is not None and channel["type"] == "telegram_private":
-        await db.add_join_request(event.from_user.id, channel["id"])
+    if channel is None:
+        logger.warning(f"[join_request] chat_id={event.chat.id} uchun bazada kanal topilmadi!")
+        return
+    if channel["type"] != "telegram_private":
+        logger.warning(
+            f"[join_request] chat_id={event.chat.id} bazada '{channel['type']}' turida, "
+            "'telegram_private' emas!"
+        )
+        return
+    await db.add_join_request(event.from_user.id, channel["id"])
+    logger.info(f"[join_request] SAQLANDI: channel_id={channel['id']} user_id={event.from_user.id}")
+
