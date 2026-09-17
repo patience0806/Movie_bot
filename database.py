@@ -556,7 +556,22 @@ async def get_admins():
         db.row_factory = aiosqlite.Row
         cursor = await db.execute("SELECT * FROM admins ORDER BY is_owner DESC, id ASC")
         return await cursor.fetchall()
-
+async def remove_admin(telegram_id: int) -> bool:
+    """Adminni o'chiradi. Owner (is_owner=1) HECH QACHON o'chirilmaydi - xavfsizlik
+    himoyasi shu funksiyaning ICHIDA, chaqiruvchi tomonda emas (backend darajasida
+    qo'shimcha himoya)."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute(
+            "SELECT is_owner FROM admins WHERE telegram_id = ?", (telegram_id,)
+        )
+        row = await cursor.fetchone()
+        if row is None:
+            return False
+        if row[0] == 1:
+            return False
+        await db.execute("DELETE FROM admins WHERE telegram_id = ?", (telegram_id,))
+        await db.commit()
+        return True
 
 # ==================== PREMIUM: TARIFLAR (premium_plans) ====================
 

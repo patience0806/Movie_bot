@@ -49,12 +49,10 @@ class BroadcastMessage(StatesGroup):
 
 
 class PremiumBuy(StatesGroup):
-    """Oddiy foydalanuvchi Premium sotib olayotganda ishlatiladi."""
     waiting_screenshot = State()
 
 
 class PremiumPlanAdd(StatesGroup):
-    """Admin yangi Premium tarif qo'shayotganda ishlatiladi."""
     name = State()
     duration_days = State()
     price = State()
@@ -62,11 +60,20 @@ class PremiumPlanAdd(StatesGroup):
 
 
 class PremiumPlanEdit(StatesGroup):
-    """Admin mavjud Premium tarifni tahrirlayotganda ishlatiladi."""
     new_value = State()
 
 
 class PremiumCard(StatesGroup):
-    """Admin karta raqami/egasini o'zgartirayotganda ishlatiladi."""
     waiting_number = State()
     waiting_holder = State()
+
+
+class AdminAdd(StatesGroup):
+    """Owner yangi admin qo'shayotganda ishlatiladi."""
+    waiting_id = State()
+
+
+class AdminRemove(StatesGroup):
+    """Owner adminni chiqarayotganda ishlatiladi."""
+    waiting_id = State()
+    confirm = State()

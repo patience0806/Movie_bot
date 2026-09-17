@@ -6,7 +6,7 @@ import database as db
 from utils.filters import IsAdmin
 from keyboards.reply.user import BTN_ADMIN_PANEL, get_user_menu
 from keyboards.reply.admin import get_admin_menu, BTN_BACK, BTN_MOVIES, BTN_CHANNELS, \
-    BTN_ADS, BTN_PREMIUM, BTN_STATISTICS
+    BTN_ADS, BTN_PREMIUM, BTN_ADMINS, BTN_STATISTICS
 from keyboards.reply.movie import get_movie_menu
 from keyboards.reply.channel import get_channel_menu
 
@@ -17,7 +17,8 @@ router.message.filter(IsAdmin())
 @router.message(F.text == BTN_ADMIN_PANEL)
 async def open_admin_panel(message: Message, state: FSMContext):
     await state.update_data(admin_section="main")
-    await message.answer("👤 Admin Panel", reply_markup=get_admin_menu())
+    is_owner = await db.is_owner(message.from_user.id)
+    await message.answer("👤 Admin Panel", reply_markup=get_admin_menu(is_owner))
 
 
 @router.message(F.text == BTN_MOVIES)
@@ -44,6 +45,18 @@ async def open_premium_panel(message: Message, state: FSMContext):
     await state.update_data(admin_section="premium")
     from handlers.admin.premium import premium_entry
     await premium_entry(message, state)
+
+
+@router.message(F.text == BTN_ADMINS)
+async def open_admins_panel(message: Message, state: FSMContext):
+    # Ikkinchi darajali himoya: tugma faqat owner uchun ko'rsatiladi (get_admin_menu
+    # is_owner=False bo'lsa yashiradi), lekin backend darajasida ham tekshiramiz -
+    # agar oddiy admin biror sabab bilan shu matnni yuborsa, ichkariga kirmaydi.
+    if not await db.is_owner(message.from_user.id):
+        return
+    await state.update_data(admin_section="admins")
+    from handlers.admin.admins import admins_entry
+    await admins_entry(message, state)
 
 
 @router.message(F.text == BTN_STATISTICS)
@@ -80,9 +93,10 @@ async def go_back(message: Message, state: FSMContext):
     data = await state.get_data()
     section = data.get("admin_section", "main")
 
-    if section in ("movies", "channels", "ads", "premium"):
+    if section in ("movies", "channels", "ads", "premium", "admins"):
         await state.update_data(admin_section="main")
-        await message.answer("👤 Admin Panel", reply_markup=get_admin_menu())
+        is_owner = await db.is_owner(message.from_user.id)
+        await message.answer("👤 Admin Panel", reply_markup=get_admin_menu(is_owner))
         return
 
     await state.update_data(admin_section=None)

@@ -21,6 +21,7 @@ from handlers.admin import movies as admin_movies
 from handlers.admin import channels as admin_channels
 from handlers.admin import ads as admin_ads
 from handlers.admin import premium as admin_premium
+from handlers.admin import admins as admin_admins
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -47,6 +48,7 @@ async def main():
     dp.include_router(admin_channels.router)
     dp.include_router(admin_ads.router)
     dp.include_router(admin_premium.router)
+    dp.include_router(admin_admins.router)
 
     # User routerlar
     dp.include_router(user_start.router)

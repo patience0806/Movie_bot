@@ -44,7 +44,8 @@ async def ads_entry(message: Message, state: FSMContext):
 @router.message(BroadcastMessage.confirm, F.text == CANCEL_TEXT)
 async def ads_cancel(message: Message, state: FSMContext):
     await state.clear()
-    await message.answer("❌ Reklama bekor qilindi.", reply_markup=get_admin_menu())
+    is_owner = await db.is_owner(message.from_user.id)
+    await message.answer("❌ Reklama bekor qilindi.", reply_markup=get_admin_menu(is_owner))
 
 
 @router.message(BroadcastMessage.waiting_content)
@@ -68,8 +69,9 @@ async def ads_send_broadcast(message: Message, state: FSMContext, bot: Bot):
     await state.clear()
 
     users = await db.get_all_users()
+    is_owner = await db.is_owner(message.from_user.id)
     status_msg = await message.answer(
-        f"⏳ Yuborilmoqda... 0/{len(users)}", reply_markup=get_admin_menu()
+        f"⏳ Yuborilmoqda... 0/{len(users)}", reply_markup=get_admin_menu(is_owner)
     )
 
     sent, failed = 0, 0
